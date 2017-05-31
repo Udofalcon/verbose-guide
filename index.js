@@ -3,11 +3,25 @@ var googleMapsClient = require('@google/maps').createClient({
 });
 var util = require('util');
 var fs = require('fs');
+var prependFile = require('prepend-file');
 
 var size = 256; //n step width x n step width. 2^n
 var earthRadius = 6378.137 * 1000; // km * 1000 = meters
 var chunkSize = 128;
-var stepWidth = 9.54395;//1988220215; // meter
+//var stepWidth = 9.54395;//1988220215; // meter
+var zoomLevel = 17;
+var pixelsAtEquator = 256 * Math.pow(2, zoomLevel);
+var metersPerPixel = 2 * Math.PI * earthRadius / pixelsAtEquator;
+var imageSize = 640;
+var zoomWidth = imageSize * metersPerPixel;
+var stepWidth = Math.round(100000 * zoomWidth / size) / 100000; console.log(pixelsAtEquator, stepWidth);
+
+var minHeight = Infinity;
+var maxHeight = -Infinity;
+var north = -Infinity;
+var east = -Infinity;
+var south = Infinity;
+var west = Infinity;
 
 googleMapsClient.geocode({
 	address: ''
@@ -43,6 +57,8 @@ function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData
 		latitudeData.push(lastLatitude + degDistance);
 		
 		lastLatitude += degDistance;
+		
+		north = lastLatitude;
 	}
 	
 	lastLatitude = center;
@@ -52,7 +68,7 @@ function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData
 		var distance;
 		
 		do {
-			distance = Math.round(100000 * Haversine(lastLatitude, lng, lastLatitude - degDistance, lng, earthRadius)) / 100000;//console.log("!!", distance, degDistance);
+			distance = Math.round(100000 * Haversine(lastLatitude, lng, lastLatitude - degDistance, lng, earthRadius)) / 100000;
 			degDistance /= distance;
 			degDistance *= stepWidth;
 		} while(distance !== stepWidth);
@@ -60,6 +76,8 @@ function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData
 		latitudeData.push(lastLatitude - degDistance);
 		
 		lastLatitude -= degDistance;
+		
+		south = lastLatitude;
 	}
 	
 	return latitudeData;
@@ -87,6 +105,8 @@ function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeDa
 		longitudeData.push(lastLongitude + degDistance);
 		
 		lastLongitude += degDistance;
+		
+		east = lastLongitude;
 	}
 	
 	lastLongitude = center;
@@ -96,7 +116,7 @@ function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeDa
 		var distance;
 		
 		do {
-			distance = Math.round(100000 * Haversine(lat, lastLongitude, lat, lastLongitude - degDistance, earthRadius)) / 100000;
+			distance = Math.round(100000 * Haversine(lat, lastLongitude, lat, lastLongitude - degDistance, earthRadius)) / 100000;//console.log("!!!!", distance, degDistance);
 			degDistance /= distance;
 			degDistance *= stepWidth;
 		} while(distance !== stepWidth);
@@ -104,6 +124,8 @@ function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeDa
 		longitudeData.push(lastLongitude - degDistance);
 		
 		lastLongitude -= degDistance;
+		
+		west = lastLongitude;
 	}
 	
 	return longitudeData;
@@ -144,11 +166,38 @@ function getElevationData(lat, lng) {console.log("\n\n\n\n\n\n\n\n\n\ngetElevati
 			outputIndex++;
 			if(!err) {
 				
-				var appendData = formatOutput(response.json.results) + ',\n';
+				var appendData = formatOutput(response.json.results);
+				
+				for(var resultIndex = 0; resultIndex < response.json.results.length; resultIndex++) {
+					if(parseFloat(response.json.results[resultIndex].elevation) > maxHeight) {
+						maxHeight = parseFloat(response.json.results[resultIndex].elevation);
+					}
+					if(parseFloat(response.json.results[resultIndex].elevation) < minHeight) {
+						minHeight = parseFloat(response.json.results[resultIndex].elevation);
+					}
+				}
+				
 				fs.appendFile('./terrainData.data', appendData, function(err) {
 					if(err) throw err;
 					
 					console.log(100 * (++doneIndex) / query.length + "%");
+					
+					if(doneIndex === query.length) {
+						var prependData = "minHeight " + minHeight + "f\n"
+							+ "maxHeight " + maxHeight + "f\n"
+							+ "north " + north + "f\n"
+							+ "east " + east + "f\n"
+							+ "south " + south + "f\n"
+							+ "west " + west + "f\n";
+						
+						prependFile('./terrainData.data', prependData, function(err) {
+							if(err) {
+								throw err;
+							}
+							
+							console.log("Successfully prepended data.");
+						});
+					}
 				});
 				
 			}
@@ -160,13 +209,16 @@ function formatOutput(input) {
 	var output = "";
 	
 	for(var i = 0; i < input.length; i++) {
-		if(output != "") {
-			output += ",\n";
-		}
-		output += "new TerrainData("
-			+ input[i].elevation + "f, "
-			+ "new Location(" + input[i].location.lat + "f, " + input[i].location.lng + "f), "
-			+ input[i].resolution + "f)"
+		//if(output != "") {
+			//output += ",\n";
+		//}
+		//output += "new TerrainData("
+		//	+ input[i].elevation + "f, "
+		//	+ "new Location(" + input[i].location.lat + "f, " + input[i].location.lng + "f), "
+		//	+ input[i].resolution + "f)"
+		output += input[i].elevation + "f "
+			+ input[i].location.lat + "f "
+			+ input[i].location.lng + "f\n"
 	}
 	
 	return output;
