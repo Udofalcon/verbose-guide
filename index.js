@@ -5,16 +5,15 @@ var util = require('util');
 var fs = require('fs');
 var prependFile = require('prepend-file');
 
-var size = 256; //n step width x n step width. 2^n
+var size = 512; //n step width x n step width. 2^n
 var earthRadius = 6378.137 * 1000; // km * 1000 = meters
 var chunkSize = 128;
-//var stepWidth = 9.54395;//1988220215; // meter
-var zoomLevel = 17;
+var zoomLevel = 16;
 var pixelsAtEquator = 256 * Math.pow(2, zoomLevel);
 var metersPerPixel = 2 * Math.PI * earthRadius / pixelsAtEquator;
 var imageSize = 640;
 var zoomWidth = imageSize * metersPerPixel;
-var stepWidth = Math.round(100000 * zoomWidth / size) / 100000; console.log(pixelsAtEquator, stepWidth);
+var stepWidth = Math.round(100000 * zoomWidth / size) / 100000;
 
 var minHeight = Infinity;
 var maxHeight = -Infinity;
@@ -23,8 +22,11 @@ var east = -Infinity;
 var south = Infinity;
 var west = Infinity;
 
+// If the query fails, manually enter the last percentage that was output to log. The script will pick up where it left off.
+var totalQueryPosition = 0;//75.20823125918668 + (1 / size);
+
 googleMapsClient.geocode({
-	address: ''
+	address: '43.012723, -83.712156'
 }, function(err, response) {
 	if(!err) {
 		var locationData = response.json.results[0].geometry.location;
@@ -36,7 +38,7 @@ googleMapsClient.geocode({
 	}
 });
 
-function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData");
+function getLatitudeData(data) {
 	var radius = size / 2;
 	var degDistance = 1;
 	var center = parseFloat(data.lat);
@@ -45,16 +47,16 @@ function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData
 	var lastLatitude = center;
 	
 	// North
-	for(var i = 0; i < radius; i++) {console.log(50 * (i + 1) / radius + "%");
+	for(var i = 0; i < radius; i++) {
 		var distance;
 		
 		do {
-			distance = Math.round(100000 * Haversine(lastLatitude, lng, lastLatitude + degDistance, lng, earthRadius)) / 100000;
+			distance = Math.round(1000000 * Haversine(lastLatitude, lng, lastLatitude + degDistance, lng, earthRadius)) / 1000000;
 			degDistance /= distance;
 			degDistance *= stepWidth;
 		} while(distance !== stepWidth);
 		
-		latitudeData.push(lastLatitude + degDistance);
+		latitudeData.push(Math.round(1000000 * (lastLatitude + degDistance)) / 1000000);
 		
 		lastLatitude += degDistance;
 		
@@ -64,16 +66,16 @@ function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData
 	lastLatitude = center;
 	
 	// South
-	for(var i = 0; i < radius; i++) {console.log(50 + 50 * (i + 1) / radius + "%");
+	for(var i = 0; i < radius; i++) {
 		var distance;
 		
 		do {
-			distance = Math.round(100000 * Haversine(lastLatitude, lng, lastLatitude - degDistance, lng, earthRadius)) / 100000;
+			distance = Math.round(1000000 * Haversine(lastLatitude, lng, lastLatitude - degDistance, lng, earthRadius)) / 1000000;
 			degDistance /= distance;
 			degDistance *= stepWidth;
 		} while(distance !== stepWidth);
 		
-		latitudeData.push(lastLatitude - degDistance);
+		latitudeData.push(Math.round(1000000 * (lastLatitude - degDistance)) / 1000000);
 		
 		lastLatitude -= degDistance;
 		
@@ -83,7 +85,7 @@ function getLatitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLatitudeData
 	return latitudeData;
 }
 
-function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeData");
+function getLongitudeData(data) {
 	var radius = size / 2;
 	var degDistance = 1;
 	var center = parseFloat(data.lng);
@@ -92,17 +94,17 @@ function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeDa
 	var lastLongitude = center; 
 	
 	// East
-	for(var i = 0; i < radius; i++) {console.log(50 * (i + 1) / radius + "%");
+	for(var i = 0; i < radius; i++) {
 		var distance;
 		
 		do {
-			distance = Math.round(100000 * Haversine(lat, lastLongitude, lat, lastLongitude + degDistance, earthRadius)) / 100000;//console.log("!!!", distance, degDistance);
+			distance = Math.round(1000000 * Haversine(lat, lastLongitude, lat, lastLongitude + degDistance, earthRadius)) / 1000000;
 			
 			degDistance /= distance;
 			degDistance *= stepWidth;
 		} while(distance !== stepWidth);
 		
-		longitudeData.push(lastLongitude + degDistance);
+		longitudeData.push(Math.round(1000000 * (lastLongitude + degDistance)) / 1000000);
 		
 		lastLongitude += degDistance;
 		
@@ -112,16 +114,16 @@ function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeDa
 	lastLongitude = center;
 	
 	// West
-	for(var i = 0; i < radius; i++) {console.log(50 + 50 * (i + 1) / radius + "%");
+	for(var i = 0; i < radius; i++) {
 		var distance;
 		
 		do {
-			distance = Math.round(100000 * Haversine(lat, lastLongitude, lat, lastLongitude - degDistance, earthRadius)) / 100000;//console.log("!!!!", distance, degDistance);
+			distance = Math.round(1000000 * Haversine(lat, lastLongitude, lat, lastLongitude - degDistance, earthRadius)) / 1000000;
 			degDistance /= distance;
 			degDistance *= stepWidth;
 		} while(distance !== stepWidth);
 		
-		longitudeData.push(lastLongitude - degDistance);
+		longitudeData.push(Math.round(1000000 * (lastLongitude - degDistance)) / 1000000);
 		
 		lastLongitude -= degDistance;
 		
@@ -131,14 +133,11 @@ function getLongitudeData(data) {console.log("\n\n\n\n\n\n\n\n\n\ngetLongitudeDa
 	return longitudeData;
 }
 
-function getElevationData(lat, lng) {console.log("\n\n\n\n\n\n\n\n\n\ngetElevationData");
+function getElevationData(lat, lng) {
 	var coordinates = [];
 	var query = [];
 	var count = 0;
 	var queryIndex = 0;
-	var responseIndex = 0;
-	var output = [];
-	var outputIndex = 0;
 	
 	for(var i = 0; i < lat.length; i++) {
 		for(var j = 0; j < lng.length; j++) {
@@ -153,17 +152,20 @@ function getElevationData(lat, lng) {console.log("\n\n\n\n\n\n\n\n\n\ngetElevati
 		}
 	}
 	
-	fs.writeFileSync('./terrainData.data', '', 'utf-8');
+	if(totalQueryPosition == 0) {
+		fs.writeFileSync('./terrainData.data', '', 'utf-8');
+	}
 	
 	var doneIndex = 0;
 	
-	for(var index = 0; index < query.length; index++) {
-		
+	queryElevation(0, query);
+}
+
+function queryElevation(index, query) {
+	if(100 * (index + 1) / query.length > totalQueryPosition) {
 		googleMapsClient.elevation({
 			locations: query[index]
 		}, function(err, response) {
-			var oIndex = outputIndex;
-			outputIndex++;
 			if(!err) {
 				
 				var appendData = formatOutput(response.json.results);
@@ -180,9 +182,9 @@ function getElevationData(lat, lng) {console.log("\n\n\n\n\n\n\n\n\n\ngetElevati
 				fs.appendFile('./terrainData.data', appendData, function(err) {
 					if(err) throw err;
 					
-					console.log(100 * (++doneIndex) / query.length + "%");
+					console.log(100 * (++index) / query.length + "%");
 					
-					if(doneIndex === query.length) {
+					if(index === query.length) {
 						var prependData = "minHeight " + minHeight + "f\n"
 							+ "maxHeight " + maxHeight + "f\n"
 							+ "north " + north + "f\n"
@@ -195,13 +197,17 @@ function getElevationData(lat, lng) {console.log("\n\n\n\n\n\n\n\n\n\ngetElevati
 								throw err;
 							}
 							
-							console.log("Successfully prepended data.");
+							console.log("Queries complete.");
 						});
+					} else {
+						queryElevation(index, query);
 					}
 				});
 				
 			}
 		});
+	} else {
+		queryElevation(++index, query);
 	}
 }
 
@@ -209,13 +215,6 @@ function formatOutput(input) {
 	var output = "";
 	
 	for(var i = 0; i < input.length; i++) {
-		//if(output != "") {
-			//output += ",\n";
-		//}
-		//output += "new TerrainData("
-		//	+ input[i].elevation + "f, "
-		//	+ "new Location(" + input[i].location.lat + "f, " + input[i].location.lng + "f), "
-		//	+ input[i].resolution + "f)"
 		output += input[i].elevation + "f "
 			+ input[i].location.lat + "f "
 			+ input[i].location.lng + "f\n"
